@@ -1,0 +1,13 @@
+# Production-Grade RAG with Semantic Caching
+# Core dependencies
+numpy>=1.24.0
+rich>=13.0.0
+
+# Vector search (FAISS - CPU version for compatibility)
+faiss-cpu>=1.7.4
+
+# Optional: Real embeddings (not required for demo mode)
+# sentence-transformers>=2.2.0
+
+# Optional: Real LLM API (not required for demo mode)
+# openai>=1.0.0
