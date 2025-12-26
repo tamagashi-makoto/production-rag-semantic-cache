@@ -194,17 +194,38 @@ class LLMService:
     """
     Service for LLM-based answer generation.
     
-    Supports mock mode for demos and real API mode for production.
+    Supports:
+    - Ollama mode (local LLM with gemma3:1b)
+    - OpenAI mode (API-based)
+    - Mock mode (for demos without any LLM)
     """
     
-    def __init__(self, mock_mode: bool = USE_MOCK_MODE):
+    def __init__(self, mock_mode: bool = USE_MOCK_MODE, use_ollama: bool = False, ollama_model: str = "gemma3:1b"):
         self.mock_mode = mock_mode
+        self.use_ollama = use_ollama
+        self.ollama_model = ollama_model
         self.mock_config = MockLLMConfig()
+        self.ollama_client = None
+        self.openai_client = None
         
-        if not mock_mode:
+        if use_ollama and not mock_mode:
+            try:
+                import ollama
+                self.ollama_client = ollama
+                # Test connection
+                self.ollama_client.list()
+                print(f"✓ Ollama connected, using model: {ollama_model}")
+            except ImportError:
+                print("Warning: ollama not installed. Run: pip install ollama")
+                self.mock_mode = True
+            except Exception as e:
+                print(f"Warning: Ollama connection failed: {e}")
+                print("Make sure Ollama is running: ollama serve")
+                self.mock_mode = True
+        elif not mock_mode:
             try:
                 import openai
-                self.client = openai.OpenAI()
+                self.openai_client = openai.OpenAI()
             except ImportError:
                 print("Warning: openai not installed, falling back to mock mode")
                 self.mock_mode = True
@@ -218,13 +239,19 @@ class LLMService:
         if self.mock_mode:
             return self._mock_generate(query, context_docs)
         
-        # Build context string
+        if self.use_ollama and self.ollama_client:
+            return self._ollama_generate(query, context_docs)
+        
+        return self._openai_generate(query, context_docs)
+    
+    def _build_prompt(self, query: str, context_docs: List[SearchResult]) -> str:
+        """Build the RAG prompt with context."""
         context = "\n\n".join([
             f"Document: {doc.title}\n{doc.content}"
             for doc in context_docs
         ])
         
-        prompt = f"""Based on the following context, answer the user's question.
+        return f"""You are a helpful customer service assistant. Answer the user's question based ONLY on the provided context. Be concise and helpful.
 
 Context:
 {context}
@@ -232,10 +259,37 @@ Context:
 Question: {query}
 
 Answer:"""
+    
+    def _ollama_generate(self, query: str, context_docs: List[SearchResult]) -> Tuple[str, float, float]:
+        """Generate using Ollama local LLM."""
+        prompt = self._build_prompt(query, context_docs)
         
         start_time = time.time()
         
-        response = self.client.chat.completions.create(
+        response = self.ollama_client.chat(
+            model=self.ollama_model,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            options={
+                "num_predict": 256,  # Limit response length
+                "temperature": 0.7,
+            }
+        )
+        
+        latency = time.time() - start_time
+        answer = response['message']['content']
+        
+        # Ollama is local, so cost is $0
+        return answer, latency, 0.0
+    
+    def _openai_generate(self, query: str, context_docs: List[SearchResult]) -> Tuple[str, float, float]:
+        """Generate using OpenAI API."""
+        prompt = self._build_prompt(query, context_docs)
+        
+        start_time = time.time()
+        
+        response = self.openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=500,
@@ -244,7 +298,7 @@ Answer:"""
         latency = time.time() - start_time
         answer = response.choices[0].message.content
         
-        # Estimate cost (approximate)
+        # Estimate cost (approximate for gpt-4o-mini)
         input_tokens = len(prompt.split()) * 1.3
         output_tokens = len(answer.split()) * 1.3
         cost = (input_tokens * 0.00015 + output_tokens * 0.0006) / 1000
@@ -304,17 +358,18 @@ class RAGPipeline:
     - Query embedding
     - Semantic cache lookup
     - Knowledge base retrieval
-    - LLM generation
+    - LLM generation (Ollama, OpenAI, or Mock)
     - Cache population
     - Knowledge base updates with cache invalidation
     """
     
-    def __init__(self, mock_mode: bool = USE_MOCK_MODE):
+    def __init__(self, mock_mode: bool = USE_MOCK_MODE, use_ollama: bool = False, ollama_model: str = "gemma3:1b"):
         self.embedding_service = EmbeddingService(mock_mode)
-        self.llm_service = LLMService(mock_mode)
+        self.llm_service = LLMService(mock_mode, use_ollama=use_ollama, ollama_model=ollama_model)
         self.knowledge_base = KnowledgeBaseStore()
         self.cache = SemanticCacheStore()
         self.stats = PipelineStats()
+        self.use_ollama = use_ollama
         
         # Initialize with sample data
         self._init_knowledge_base()

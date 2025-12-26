@@ -6,8 +6,11 @@ rich>=13.0.0
 # Vector search (FAISS - CPU version for compatibility)
 faiss-cpu>=1.7.4
 
+# Local LLM with Ollama
+ollama>=0.4.0
+
 # Optional: Real embeddings (not required for demo mode)
 # sentence-transformers>=2.2.0
 
-# Optional: Real LLM API (not required for demo mode)
+# Optional: OpenAI API (alternative to Ollama)
 # openai>=1.0.0
