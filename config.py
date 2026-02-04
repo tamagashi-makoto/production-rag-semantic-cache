@@ -1,52 +1,22 @@
-"""
-Configuration module for the RAG Semantic Cache system.
-
-Supports both mock mode (for demos without API keys) and real mode
-(using OpenAI/Azure for embeddings and LLM generation).
-"""
+"""Configuration for RAG semantic cache system."""
 
 import os
 from dataclasses import dataclass
 from typing import Optional
 
-
-# =============================================================================
-# Core Configuration
-# =============================================================================
-
-# Toggle between mock and real API mode
-# Set to False and provide API keys for production use
 USE_MOCK_MODE: bool = os.getenv("USE_MOCK_MODE", "true").lower() == "true"
-
-# Semantic cache similarity threshold (0.0 - 1.0)
-# Higher values = stricter matching, fewer cache hits but more accurate
 CACHE_SIMILARITY_THRESHOLD: float = float(os.getenv("CACHE_THRESHOLD", "0.90"))
-
-# Embedding dimension (384 for all-MiniLM-L6-v2, 1536 for OpenAI ada-002)
 EMBEDDING_DIM: int = 384
-
-# Number of documents to retrieve from knowledge base
 TOP_K_DOCUMENTS: int = 3
 
 
-# =============================================================================
-# Mock Configuration (for demos)
-# =============================================================================
-
 @dataclass
 class MockLLMConfig:
-    """Configuration for simulated LLM behavior."""
-    
-    # Simulated latency range (seconds)
     min_latency: float = 2.5
     max_latency: float = 4.0
-    
-    # Simulated cost per request (USD)
     cost_per_request: float = 0.002
-    
-    # Response templates for demo
     response_templates: dict = None
-    
+
     def __post_init__(self):
         if self.response_templates is None:
             self.response_templates = {
@@ -76,27 +46,16 @@ class MockLLMConfig:
 
 @dataclass
 class MockEmbeddingConfig:
-    """Configuration for simulated embedding behavior."""
-    
-    # Simulated latency (seconds)
     latency: float = 0.05
-    
-    # Seed for deterministic embeddings in demos
     use_deterministic: bool = True
 
 
-# =============================================================================
-# Real API Configuration
-# =============================================================================
-
 @dataclass
 class OpenAIConfig:
-    """Configuration for OpenAI API."""
-    
     api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
     embedding_model: str = "text-embedding-3-small"
     llm_model: str = "gpt-4o-mini"
-    
+
     @property
     def is_configured(self) -> bool:
         return self.api_key is not None
@@ -104,22 +63,16 @@ class OpenAIConfig:
 
 @dataclass
 class AzureOpenAIConfig:
-    """Configuration for Azure OpenAI API."""
-    
     api_key: Optional[str] = os.getenv("AZURE_OPENAI_API_KEY")
     endpoint: Optional[str] = os.getenv("AZURE_OPENAI_ENDPOINT")
     embedding_deployment: str = os.getenv("AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-large")
     llm_deployment: str = os.getenv("AZURE_LLM_DEPLOYMENT", "gpt-4o")
     api_version: str = "2024-02-01"
-    
+
     @property
     def is_configured(self) -> bool:
         return self.api_key is not None and self.endpoint is not None
 
-
-# =============================================================================
-# Sample Knowledge Base (for demos)
-# =============================================================================
 
 SAMPLE_KNOWLEDGE_BASE = {
     "refund_policy": {
@@ -159,10 +112,5 @@ SAMPLE_KNOWLEDGE_BASE = {
         ),
     },
 }
-
-
-# =============================================================================
-# Logging Configuration
-# =============================================================================
 
 ENABLE_VERBOSE_LOGGING: bool = os.getenv("VERBOSE", "false").lower() == "true"
